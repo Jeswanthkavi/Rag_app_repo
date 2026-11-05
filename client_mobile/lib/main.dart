@@ -18,7 +18,7 @@ class RAGMobileApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Antigravity RAG',
+      title: 'AK-RAG(18)',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
       home: const AuthGate(),
@@ -87,25 +87,35 @@ class _MainNavigationScaffoldState extends State<MainNavigationScaffold> {
         index: _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        backgroundColor: AppTheme.cardDark,
-        indicatorColor: AppTheme.primaryTeal.withValues(alpha: 0.2),
-        onDestinationSelected: (idx) {
-          setState(() => _currentIndex = idx);
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            selectedIcon: Icon(Icons.chat_bubble, color: AppTheme.primaryTeal),
-            label: 'Chat',
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: AppTheme.surfaceNavy,
+          border: Border(
+            top: BorderSide(color: AppTheme.borderSlate, width: 1),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.folder_outlined),
-            selectedIcon: Icon(Icons.folder, color: AppTheme.primaryTeal),
-            label: 'Documents',
-          ),
-        ],
+        ),
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          backgroundColor: AppTheme.surfaceNavy,
+          indicatorColor: AppTheme.primaryTeal.withValues(alpha: 0.18),
+          elevation: 0,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          onDestinationSelected: (idx) {
+            setState(() => _currentIndex = idx);
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.chat_bubble_outline_rounded, color: AppTheme.textSecondary),
+              selectedIcon: Icon(Icons.chat_bubble_rounded, color: AppTheme.primaryTeal),
+              label: 'AK-RAG Chat',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.folder_outlined, color: AppTheme.textSecondary),
+              selectedIcon: Icon(Icons.folder_rounded, color: AppTheme.primaryTeal),
+              label: 'Documents',
+            ),
+          ],
+        ),
       ),
     );
   }

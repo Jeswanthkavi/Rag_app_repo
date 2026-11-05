@@ -12,6 +12,7 @@ class MessageBubble extends StatelessWidget {
     final List<InlineSpan> spans = [];
     final pattern = RegExp(r'\[([^,\]]+?),\s*Page\s*(\d+)\]', caseSensitive: false);
     final text = message.content;
+    final isUser = message.sender == 'user';
 
     int lastMatchEnd = 0;
     for (final match in pattern.allMatches(text)) {
@@ -19,9 +20,10 @@ class MessageBubble extends StatelessWidget {
         spans.add(TextSpan(
           text: text.substring(lastMatchEnd, match.start),
           style: TextStyle(
-            color: message.sender == 'user' ? Colors.black : Colors.white70,
-            fontSize: 14,
-            height: 1.4,
+            color: isUser ? const Color(0xFF042F2E) : AppTheme.textPrimary,
+            fontSize: 14.5,
+            height: 1.45,
+            fontWeight: isUser ? FontWeight.w500 : FontWeight.w400,
           ),
         ));
       }
@@ -44,30 +46,30 @@ class MessageBubble extends StatelessWidget {
         passagePreview: 'Verified excerpt from $docName (Page $pageNum).',
       );
 
-      // Interactive citation badge
+      // Interactive warm yellow citation badge
       spans.add(WidgetSpan(
         alignment: PlaceholderAlignment.middle,
         child: GestureDetector(
           onTap: () => CitationBottomSheet.show(context, matchedCitation!),
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
             decoration: BoxDecoration(
-              color: AppTheme.primaryTeal.withValues(alpha: 0.2),
+              color: AppTheme.citationBg,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.5)),
+              border: Border.all(color: AppTheme.citationBorder, width: 1),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.bookmark_outline, size: 12, color: AppTheme.primaryTeal),
-                const SizedBox(width: 4),
+                const Icon(Icons.bookmark, size: 11, color: AppTheme.citationGold),
+                const SizedBox(width: 3),
                 Text(
                   '$docName, P.$pageNum',
                   style: const TextStyle(
-                    color: AppTheme.primaryTeal,
+                    color: AppTheme.citationGold,
                     fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -83,9 +85,10 @@ class MessageBubble extends StatelessWidget {
       spans.add(TextSpan(
         text: text.substring(lastMatchEnd),
         style: TextStyle(
-          color: message.sender == 'user' ? Colors.black : Colors.white70,
-          fontSize: 14,
-          height: 1.4,
+          color: isUser ? const Color(0xFF042F2E) : AppTheme.textPrimary,
+          fontSize: 14.5,
+          height: 1.45,
+          fontWeight: isUser ? FontWeight.w500 : FontWeight.w400,
         ),
       ));
     }
@@ -106,26 +109,46 @@ class MessageBubble extends StatelessWidget {
           if (!isUser)
             Container(
               margin: const EdgeInsets.only(right: 8, top: 2),
-              padding: const EdgeInsets.all(6),
+              width: 32,
+              height: 32,
               decoration: BoxDecoration(
-                color: AppTheme.primaryTeal.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.3)),
+                color: AppTheme.cardNavy,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: AppTheme.brandLime.withValues(alpha: 0.5),
+                  width: 1.2,
+                ),
               ),
-              child: const Icon(Icons.smart_toy_outlined, size: 16, color: AppTheme.primaryTeal),
+              padding: const EdgeInsets.all(3),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: isUser ? AppTheme.primaryTeal : AppTheme.cardDark,
+                color: isUser ? AppTheme.primaryTeal : AppTheme.cardNavy,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
                   bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
                   bottomRight: isUser ? Radius.zero : const Radius.circular(16),
                 ),
-                border: isUser ? null : Border.all(color: AppTheme.borderDark),
+                border: isUser ? null : Border.all(color: AppTheme.borderSubtle),
+                boxShadow: isUser
+                    ? [
+                        BoxShadow(
+                          color: AppTheme.primaryTeal.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        )
+                      ]
+                    : null,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -134,19 +157,30 @@ class MessageBubble extends StatelessWidget {
                     text: TextSpan(children: _buildContentSpans(context)),
                   ),
                   if (!isUser && message.citations.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Wrap(
                       spacing: 6,
-                      runSpacing: 4,
+                      runSpacing: 5,
                       children: message.citations.map((c) {
                         return ActionChip(
-                          avatar: const Icon(Icons.check_circle_outline, size: 12, color: AppTheme.primaryTeal),
+                          avatar: const Icon(
+                            Icons.bookmark_added_rounded,
+                            size: 13,
+                            color: AppTheme.citationGold,
+                          ),
                           label: Text(
                             '${c.documentName} (P.${c.pageNumber})',
-                            style: const TextStyle(fontSize: 10, color: Colors.white70),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.citationGold,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                          backgroundColor: AppTheme.backgroundBlack,
-                          side: const BorderSide(color: AppTheme.borderDark),
+                          backgroundColor: AppTheme.citationBg,
+                          side: const BorderSide(color: AppTheme.citationBorder, width: 0.8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           onPressed: () => CitationBottomSheet.show(context, c),
                           visualDensity: VisualDensity.compact,
                         );

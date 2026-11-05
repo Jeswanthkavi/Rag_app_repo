@@ -1,11 +1,11 @@
 {
-    "name": "client_mobile",
-    "short_name": "client_mobile",
+    "name": "AK-RAG(18)",
+    "short_name": "AK-RAG(18)",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0B1120",
+    "theme_color": "#14B8A6",
+    "description": "AK-RAG(18) Personal Document Grounding Engine with Verifiable Citations.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

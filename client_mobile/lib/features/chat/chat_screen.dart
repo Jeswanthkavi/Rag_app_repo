@@ -108,12 +108,74 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('RAG Assistant'),
+        titleSpacing: 16,
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppTheme.cardNavy,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppTheme.brandLime.withValues(alpha: 0.5),
+                  width: 1.2,
+                ),
+              ),
+              padding: const EdgeInsets.all(3),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'AK-RAG(18)',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(Icons.circle, size: 7, color: AppTheme.statusSuccess),
+                    SizedBox(width: 4),
+                    Text(
+                      'Grounded Engine Active',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_comment_outlined, size: 20),
             tooltip: 'New Conversation',
             onPressed: _resetChat,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, size: 20),
+            tooltip: 'Sign Out',
+            onPressed: () async {
+              await _supabase.signOut();
+            },
           ),
         ],
       ),
@@ -124,33 +186,110 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(
               child: _messages.isEmpty && !_isLoading
                   ? Center(
-                      child: Padding(
+                      child: SingleChildScrollView(
                         padding: const EdgeInsets.all(32.0),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(16),
+                              width: 80,
+                              height: 80,
                               decoration: BoxDecoration(
-                                color: AppTheme.primaryTeal.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
+                                color: AppTheme.cardNavy,
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: AppTheme.brandLime.withValues(alpha: 0.5),
+                                  width: 1.5,
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: AppTheme.brandLimeGlow,
+                                    blurRadius: 24,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
                               ),
-                              child: const Icon(
-                                Icons.auto_awesome,
-                                size: 36,
-                                color: AppTheme.primaryTeal,
+                              padding: const EdgeInsets.all(10),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: Image.asset(
+                                  'assets/images/logo.png',
+                                  fit: BoxFit.contain,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 20),
                             const Text(
-                              'Ask Your Grounded Documents',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              'AK-RAG(18) Intelligence',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
+                                color: AppTheme.textPrimary,
+                              ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 8),
                             const Text(
-                              'Every statement cites verified source documents and page numbers.',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                              'Ask grounded questions against your uploaded documents.\nEvery statement is backed by verifiable citations.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSecondary,
+                                height: 1.4,
+                              ),
                               textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.citationBg,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: AppTheme.citationBorder),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.bookmark, size: 12, color: AppTheme.citationGold),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Warm Gold Citations',
+                                        style: TextStyle(
+                                          color: AppTheme.citationGold,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryTeal.withValues(alpha: 0.14),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: AppTheme.primaryTeal.withValues(alpha: 0.4)),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.verified_outlined, size: 12, color: AppTheme.primaryTeal),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Verified Grounds',
+                                        style: TextStyle(
+                                          color: AppTheme.primaryTeal,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -166,19 +305,32 @@ class _ChatScreenState extends State<ChatScreen> {
 
             if (_isLoading)
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: const BoxDecoration(
+                  color: AppTheme.surfaceNavy,
+                  border: Border(
+                    top: BorderSide(color: AppTheme.borderSlate, width: 0.5),
+                  ),
+                ),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SizedBox(
                       height: 14,
                       width: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.primaryTeal),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.citationGold,
+                      ),
                     ),
-                    SizedBox(width: 8),
+                    SizedBox(width: 10),
                     Text(
                       'Synthesizing grounded citations...',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.citationGold,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -188,25 +340,36 @@ class _ChatScreenState extends State<ChatScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: const BoxDecoration(
-                color: AppTheme.cardDark,
-                border: Border(top: BorderSide(color: AppTheme.borderDark)),
+                color: AppTheme.surfaceNavy,
+                border: Border(top: BorderSide(color: AppTheme.borderSlate)),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _messageController,
+                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
                       decoration: const InputDecoration(
-                        hintText: 'Ask a grounded question...',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        hintText: 'Ask AK-RAG(18) a grounded question...',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                       onSubmitted: (_) => _sendMessage(),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _isLoading ? null : _sendMessage,
-                    icon: const Icon(Icons.send_rounded, color: AppTheme.primaryTeal),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryTeal,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      onPressed: _isLoading ? null : _sendMessage,
+                      icon: const Icon(
+                        Icons.send_rounded,
+                        color: Color(0xFF042F2E),
+                        size: 20,
+                      ),
+                    ),
                   ),
                 ],
               ),
