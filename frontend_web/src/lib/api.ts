@@ -1,6 +1,9 @@
 import { DocumentItem, Message, Conversation, Citation } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 
+  (typeof window !== 'undefined' && (window.location.port === '3000' || window.location.port === '3001' || window.location.port === '5173')
+    ? 'http://localhost:8000' 
+    : '');
 
 export async function listDocuments(token: string): Promise<DocumentItem[]> {
   const res = await fetch(`${API_BASE}/api/documents`, {

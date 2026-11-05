@@ -1,9 +1,10 @@
 import os
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.supabase_client import get_service_client
@@ -86,6 +87,29 @@ async def health_check():
         "embedding_dimension": settings.embedding_dimension,
         "llm_model": settings.openrouter_model,
     }
+
+
+# Mount and serve built React Single-Page Application (SPA) if present
+static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+if os.path.exists(static_dir):
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        # Do not catch API or docs routes
+        if full_path.startswith("api") or full_path in ["docs", "redoc", "openapi.json", "health"]:
+            raise HTTPException(status_code=404, detail="Not Found")
+        
+        target = os.path.join(static_dir, full_path)
+        if os.path.isfile(target):
+            return FileResponse(target)
+        
+        index_file = os.path.join(static_dir, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend file not found")
 
 
 if __name__ == "__main__":
