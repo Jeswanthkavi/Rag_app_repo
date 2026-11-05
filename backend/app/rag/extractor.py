@@ -4,6 +4,7 @@ from typing import List, Union
 from pydantic import BaseModel
 import pdfplumber
 import pypdf
+from app.core.config import settings
 
 
 class PageBlock(BaseModel):
@@ -32,10 +33,15 @@ class DocumentExtractor:
     def _extract_pdf(cls, content: Union[bytes, str]) -> List[PageBlock]:
         blocks: List[PageBlock] = []
         stream = io.BytesIO(content) if isinstance(content, bytes) else open(content, "rb")
+        max_pages = getattr(settings, "max_pdf_pages", 250)
 
         try:
             with pdfplumber.open(stream) as pdf:
                 for idx, page in enumerate(pdf.pages, start=1):
+                    if idx > max_pages:
+                        print(f"[SECURITY] Maximum page limit ({max_pages}) reached. Truncating extraction.")
+                        break
+
                     # 1. Layout-aware text extraction
                     page_text = page.extract_text(layout=True) or ""
                     
@@ -71,6 +77,8 @@ class DocumentExtractor:
             try:
                 reader = pypdf.PdfReader(stream)
                 for idx, page in enumerate(reader.pages, start=1):
+                    if idx > max_pages:
+                        break
                     txt = page.extract_text() or ""
                     if txt.strip():
                         blocks.append(PageBlock(page_number=idx, text=txt.strip()))

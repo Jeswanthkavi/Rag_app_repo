@@ -24,6 +24,28 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SERVICE_KEY")
     )
+    supabase_jwt_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("SUPABASE_JWT_SECRET")
+    )
+
+    # Security & Abuse Guardrails
+    max_upload_size_bytes: int = Field(
+        default=20 * 1024 * 1024,  # 20 MB max file size
+        validation_alias=AliasChoices("MAX_UPLOAD_SIZE_BYTES")
+    )
+    max_pdf_pages: int = Field(
+        default=250,  # Prevent PDF decompression / page bombs
+        validation_alias=AliasChoices("MAX_PDF_PAGES")
+    )
+    rate_limit_chat_per_minute: int = Field(
+        default=30,  # Max LLM queries per minute per IP/tenant
+        validation_alias=AliasChoices("RATE_LIMIT_CHAT_PER_MINUTE")
+    )
+    rate_limit_upload_per_minute: int = Field(
+        default=10,  # Max uploads per minute per IP/tenant
+        validation_alias=AliasChoices("RATE_LIMIT_UPLOAD_PER_MINUTE")
+    )
 
     # OpenRouter LLM Configuration
     openrouter_api_key: str = Field(

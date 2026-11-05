@@ -1,13 +1,15 @@
 import json
 import uuid
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Request, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.api.auth_middleware import get_current_user, AuthenticatedUser
 from app.core.config import settings
 from app.core.supabase_client import get_service_client
+from app.core.security_logger import log_security_event
+from app.core.rate_limiter import rate_limiter
 from app.rag.embeddings import EmbeddingGenerator
 from app.rag.synthesizer import RAGSynthesizer, Citation
 
@@ -101,18 +103,28 @@ async def retrieve_relevant_chunks(
 @router.post("", status_code=status.HTTP_200_OK)
 async def chat_endpoint(
     req: ChatRequest,
+    request: Request,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Multi-turn RAG chat endpoint with verifiable citations and optional SSE streaming.
+    Multi-turn RAG chat endpoint with verifiable citations, strict tenant isolation,
+    abuse rate limiting, and optional SSE streaming.
     """
     client = get_service_client()
+    client_ip = request.client.host if request.client else "unknown"
 
-    # 1. Ensure Conversation exists
+    # Enforce rate limit to prevent LLM quota exhaustion and API abuse
+    rate_limiter.check_rate_limit(
+        request=request,
+        endpoint_tag="chat_synthesis",
+        max_requests=settings.rate_limit_chat_per_minute,
+        window_seconds=60.0,
+    )
+
+    # 1. Ensure Conversation exists and verify tenant ownership (Anti-IDOR)
     conversation_id = req.conversation_id
     if not conversation_id:
         conversation_id = str(uuid.uuid4())
-        # Generate title from first 40 chars of question
         title = req.message.strip()[:40] + ("..." if len(req.message.strip()) > 40 else "")
         try:
             client.table("conversations").insert({
@@ -123,24 +135,39 @@ async def chat_endpoint(
         except Exception:
             pass
     else:
-        # Verify conversation ownership
+        # Strict tenant ownership check to prevent cross-tenant chat leakage
         try:
             conv_check = (
                 client.table("conversations")
-                .select("id")
+                .select("id, user_id")
                 .eq("id", conversation_id)
-                .eq("user_id", current_user.user_id)
                 .maybe_single()
                 .execute()
             )
-            if not conv_check or not conv_check.data:
-                # Create if not found
+            if conv_check and conv_check.data:
+                owner_id = conv_check.data.get("user_id")
+                if owner_id and owner_id != current_user.user_id:
+                    log_security_event(
+                        "CROSS_TENANT_ACCESS_DENIED",
+                        client_ip=client_ip,
+                        user_id=current_user.user_id,
+                        detail=f"Denied attempt to access conversation {conversation_id[:8]}",
+                        severity="CRITICAL"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied: Conversation belongs to another tenant.",
+                    )
+            else:
+                # Conversation doesn't exist yet, initialize it under current tenant
                 title = req.message.strip()[:40]
                 client.table("conversations").insert({
                     "id": conversation_id,
                     "user_id": current_user.user_id,
                     "title": title,
                 }).execute()
+        except HTTPException:
+            raise
         except Exception:
             pass
 
@@ -158,13 +185,14 @@ async def chat_endpoint(
     except Exception:
         pass
 
-    # 3. Retrieve Prior Chat History for Multi-Turn Context
+    # 3. Retrieve Prior Chat History for Multi-Turn Context (Strict Tenant Scoping)
     chat_history: List[Dict[str, str]] = []
     try:
         hist_res = (
             client.table("messages")
             .select("sender, content")
             .eq("conversation_id", conversation_id)
+            .eq("user_id", current_user.user_id)
             .order("created_at", desc=False)
             .limit(6)
             .execute()
@@ -175,7 +203,7 @@ async def chat_endpoint(
     except Exception:
         pass
 
-    # 4. Vector Search Chunks
+    # 4. Vector Search Chunks (Scoped exclusively to current user)
     retrieved_chunks = await retrieve_relevant_chunks(
         user_id=current_user.user_id,
         query=req.message,
@@ -282,12 +310,39 @@ async def list_conversations(
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageItem])
 async def get_conversation_messages(
     conversation_id: str,
+    request: Request,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Fetches message history for a given conversation.
+    Fetches message history for a given conversation with strict tenant verification.
     """
     client = get_service_client()
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Verify conversation ownership first
+    conv = (
+        client.table("conversations")
+        .select("id, user_id")
+        .eq("id", conversation_id)
+        .maybe_single()
+        .execute()
+    )
+    if conv and conv.data:
+        if conv.data.get("user_id") != current_user.user_id:
+            log_security_event(
+                "CROSS_TENANT_ACCESS_DENIED",
+                client_ip=client_ip,
+                user_id=current_user.user_id,
+                detail=f"Denied attempt to read messages of conversation {conversation_id[:8]}",
+                severity="CRITICAL"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Conversation belongs to another tenant."
+            )
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+
     try:
         res = (
             client.table("messages")
@@ -308,22 +363,56 @@ async def get_conversation_messages(
             )
             for m in (res.data or [])
         ]
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve conversation messages."
+        )
 
 
 @router.delete("/conversations/{conversation_id}", status_code=status.HTTP_200_OK)
 async def delete_conversation(
     conversation_id: str,
+    request: Request,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Deletes conversation and cascades messages.
+    Deletes conversation and cascades messages with strict tenant verification.
     """
     client = get_service_client()
+    client_ip = request.client.host if request.client else "unknown"
+
+    conv = (
+        client.table("conversations")
+        .select("id, user_id")
+        .eq("id", conversation_id)
+        .maybe_single()
+        .execute()
+    )
+    if not conv or not conv.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
+
+    if conv.data.get("user_id") != current_user.user_id:
+        log_security_event(
+            "CROSS_TENANT_ACCESS_DENIED",
+            client_ip=client_ip,
+            user_id=current_user.user_id,
+            detail=f"Denied attempt to delete conversation {conversation_id[:8]}",
+            severity="CRITICAL"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Cannot delete another tenant's conversation."
+        )
+
     try:
         client.table("conversations").delete().eq("id", conversation_id).eq("user_id", current_user.user_id).execute()
         return {"success": True, "message": "Conversation deleted."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete conversation."
+        )
 

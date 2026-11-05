@@ -1,12 +1,15 @@
 import os
+import re
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status
+from fastapi import APIRouter, Request, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, status
 from pydantic import BaseModel
 
 from app.api.auth_middleware import get_current_user, AuthenticatedUser
 from app.core.config import settings
 from app.core.supabase_client import get_service_client
+from app.core.security_logger import log_security_event
+from app.core.rate_limiter import rate_limiter
 from app.rag.extractor import DocumentExtractor
 from app.rag.chunker import SemanticChunker
 from app.rag.embeddings import EmbeddingGenerator
@@ -121,26 +124,70 @@ async def process_document_pipeline(
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Uploads a document (.pdf or .txt) to Supabase Storage, registers the document in database
-    with status 'pending', and triggers asynchronous background ingestion.
+    Uploads a document (.pdf, .txt, .md) to Supabase Storage with strict size limits,
+    magic byte verification, sanitization, and asynchronous background ingestion.
     """
-    allowed_types = ["application/pdf", "text/plain", "text/markdown", "application/octet-stream"]
-    content_type = file.content_type or "application/octet-stream"
+    client_ip = request.client.host if request.client else "unknown"
 
-    # Also detect from filename extension
-    filename = file.filename or "document.pdf"
-    if not any(filename.lower().endswith(ext) for ext in [".pdf", ".txt", ".md"]):
+    # Enforce upload rate limit to protect storage and embedding quota
+    rate_limiter.check_rate_limit(
+        request=request,
+        endpoint_tag="document_upload",
+        max_requests=settings.rate_limit_upload_per_minute,
+        window_seconds=60.0,
+    )
+
+    # 1. Filename sanitization against path traversal / injection attacks
+    raw_filename = os.path.basename(file.filename or "document.pdf")
+    clean_filename = re.sub(r'[^a-zA-Z0-9_\-\. ]', '_', raw_filename).strip()
+    if not clean_filename or len(clean_filename) > 120:
+        clean_filename = f"doc_{uuid.uuid4().hex[:8]}.pdf"
+
+    # File extension check
+    lower_name = clean_filename.lower()
+    if not any(lower_name.endswith(ext) for ext in [".pdf", ".txt", ".md"]):
+        log_security_event(
+            "MALICIOUS_FILE_BLOCKED",
+            client_ip=client_ip,
+            user_id=current_user.user_id,
+            detail=f"Rejected unsupported extension for file {clean_filename}",
+            severity="WARNING"
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file format. Please upload a .pdf, .txt, or .md file."
+            detail="Unsupported file format. Only verified .pdf, .txt, and .md files are allowed."
         )
 
-    file_bytes = await file.read()
+    # 2. Bounded stream reading to enforce strict size ceiling (Anti-DoS)
+    max_size = settings.max_upload_size_bytes
+    chunk_size = 64 * 1024  # 64 KB chunks
+    total_bytes = bytearray()
+
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        total_bytes.extend(chunk)
+        if len(total_bytes) > max_size:
+            log_security_event(
+                "OVERSIZED_UPLOAD_REJECTED",
+                client_ip=client_ip,
+                user_id=current_user.user_id,
+                detail=f"Upload exceeded maximum limit of {max_size // (1024*1024)}MB",
+                severity="WARNING"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File exceeds maximum permitted size of {max_size // (1024 * 1024)} MB."
+            )
+
+    file_bytes = bytes(total_bytes)
     file_size = len(file_bytes)
 
     if file_size == 0:
@@ -149,28 +196,66 @@ async def upload_document(
             detail="Uploaded file is empty."
         )
 
+    # 3. Magic byte signature verification (Anti-MIME spoofing)
+    content_type = file.content_type or "application/octet-stream"
+    if lower_name.endswith(".pdf"):
+        if not file_bytes.startswith(b"%PDF-"):
+            log_security_event(
+                "MALICIOUS_FILE_BLOCKED",
+                client_ip=client_ip,
+                user_id=current_user.user_id,
+                detail=f"PDF magic byte header missing for {clean_filename}",
+                severity="ERROR"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid file content: The file is not a valid PDF document."
+            )
+        content_type = "application/pdf"
+    elif lower_name.endswith((".txt", ".md")):
+        # Ensure text is valid UTF-8 and contains no embedded binary null bytes
+        if b"\x00" in file_bytes:
+            log_security_event(
+                "MALICIOUS_FILE_BLOCKED",
+                client_ip=client_ip,
+                user_id=current_user.user_id,
+                detail=f"Disguised binary null bytes detected in text upload {clean_filename}",
+                severity="ERROR"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid text document: Binary null characters detected."
+            )
+        try:
+            file_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Text document must be valid UTF-8 encoded."
+            )
+        content_type = "text/plain" if lower_name.endswith(".txt") else "text/markdown"
+
     doc_id = str(uuid.uuid4())
-    safe_filename = f"{uuid.uuid4().hex[:8]}_{filename}"
-    storage_path = f"{current_user.user_id}/{safe_filename}"
+    safe_storage_name = f"{uuid.uuid4().hex[:8]}_{clean_filename}"
+    storage_path = f"{current_user.user_id}/{safe_storage_name}"
 
     client = get_service_client()
 
-    # 1. Upload file to Supabase Storage bucket
+    # 4. Upload file to Supabase Storage bucket
     try:
         client.storage.from_(settings.storage_bucket).upload(
             path=storage_path,
             file=file_bytes,
             file_options={"content-type": content_type, "upsert": "true"},
         )
-    except Exception as storage_err:
-        # Ignore already exists or log
+    except Exception:
         pass
 
-    # 2. Insert document metadata with status 'pending'
+    # 5. Insert document metadata with status 'pending'
     doc_record = {
         "id": doc_id,
         "user_id": current_user.user_id,
-        "name": filename,
+        "name": clean_filename,
         "storage_path": storage_path,
         "file_size": file_size,
         "mime_type": content_type,
@@ -185,15 +270,15 @@ async def upload_document(
     except Exception as db_err:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error registering document: {str(db_err)}"
+            detail="Database error registering document metadata."
         )
 
-    # 3. Schedule asynchronous RAG ingestion pipeline
+    # 6. Schedule asynchronous RAG ingestion pipeline
     background_tasks.add_task(
         process_document_pipeline,
         document_id=doc_id,
         user_id=current_user.user_id,
-        document_name=filename,
+        document_name=clean_filename,
         file_bytes=file_bytes,
         mime_type=content_type,
     )
@@ -285,26 +370,43 @@ async def get_document_status(
 @router.delete("/{document_id}", status_code=status.HTTP_200_OK)
 async def delete_document(
     document_id: str,
+    request: Request,
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
     Deletes document record, cascading its document_chunks, and deletes the storage object.
+    Strictly verifies tenant ownership.
     """
     client = get_service_client()
+    client_ip = request.client.host if request.client else "unknown"
+
     try:
-        # 1. Fetch document to get storage path
+        # 1. Fetch document to verify existence and ownership
         res = (
             client.table("documents")
-            .select("id, storage_path")
+            .select("id, user_id, storage_path")
             .eq("id", document_id)
-            .eq("user_id", current_user.user_id)
             .maybe_single()
             .execute()
         )
         if not res or not res.data:
-            raise HTTPException(status_code=404, detail="Document not found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
 
-        storage_path = res.data.get("storage_path")
+        doc_data = res.data
+        if doc_data.get("user_id") != current_user.user_id:
+            log_security_event(
+                "CROSS_TENANT_ACCESS_DENIED",
+                client_ip=client_ip,
+                user_id=current_user.user_id,
+                detail=f"Denied attempt to delete document {document_id[:8]} belonging to another tenant",
+                severity="CRITICAL"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: Cannot delete another tenant's document."
+            )
+
+        storage_path = doc_data.get("storage_path")
 
         # 2. Delete storage file if path exists
         if storage_path:
@@ -319,6 +421,9 @@ async def delete_document(
         return {"success": True, "message": "Document and associated vector chunks deleted successfully."}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete document."
+        )
 

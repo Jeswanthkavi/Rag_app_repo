@@ -91,6 +91,16 @@ class DocumentRecord {
 class ApiService {
   final String baseUrl = EnvConfig.apiBaseUrl;
 
+  String _extractErrorMessage(String responseBody, String defaultMsg) {
+    try {
+      final decoded = jsonDecode(responseBody);
+      if (decoded is Map && decoded['detail'] != null) {
+        return decoded['detail'].toString();
+      }
+    } catch (_) {}
+    return defaultMsg;
+  }
+
   Future<List<DocumentRecord>> getDocuments(String token) async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/documents'),
@@ -100,7 +110,7 @@ class ApiService {
       final List data = jsonDecode(response.body);
       return data.map((d) => DocumentRecord.fromJson(d)).toList();
     }
-    throw Exception('Failed to load documents: ${response.body}');
+    throw Exception(_extractErrorMessage(response.body, 'Failed to load documents.'));
   }
 
   Future<DocumentRecord> uploadDocumentBytes({
@@ -123,7 +133,7 @@ class ApiService {
     if (response.statusCode == 201 || response.statusCode == 200) {
       return DocumentRecord.fromJson(jsonDecode(response.body));
     }
-    throw Exception('Upload failed: ${response.body}');
+    throw Exception(_extractErrorMessage(response.body, 'Upload failed.'));
   }
 
   Future<void> deleteDocument(String documentId, String token) async {
@@ -132,7 +142,7 @@ class ApiService {
       headers: {'Authorization': 'Bearer $token'},
     );
     if (response.statusCode != 200) {
-      throw Exception('Delete failed: ${response.body}');
+      throw Exception(_extractErrorMessage(response.body, 'Delete failed.'));
     }
   }
 
@@ -157,6 +167,6 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     }
-    throw Exception('Chat failed: ${response.body}');
+    throw Exception(_extractErrorMessage(response.body, 'Chat query failed.'));
   }
 }
