@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, MessageSquare, LogIn, LogOut, ShieldCheck, FileText } from 'lucide-react';
+import { MessageSquare, LogIn, LogOut, ShieldCheck, FileText } from 'lucide-react';
 import { User } from '@supabase/supabase-js';
 
 interface NavbarProps {
@@ -22,12 +22,12 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center space-x-3">
-          <div className="h-10 w-10 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-inner">
-            <Database className="h-5 w-5" />
+          <div className="h-10 w-10 rounded-xl bg-slate-900 border border-teal-500/40 flex items-center justify-center p-1 shadow-md">
+            <img src="/logo.png" alt="AK-RAG(18) Logo" className="h-8 w-8 object-contain rounded-lg" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-bold text-lg text-white tracking-tight">Antigravity RAG</span>
+              <span className="font-bold text-lg text-white tracking-tight">AK-RAG(18)</span>
               <span className="text-[10px] uppercase font-semibold bg-teal-500/20 text-teal-300 border border-teal-500/40 px-2 py-0.5 rounded-full">
                 Multi-Tenant
               </span>

@@ -1,6 +1,8 @@
 import os
 import sys
 
+os.environ["TESTING"] = "true"
+
 # Ensure backend directory is in path before importing app
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -110,7 +112,8 @@ def test_rate_limiter_triggers_429():
         rate_limiter.check_rate_limit(mock_req, "test_action", max_requests=2, window_seconds=60.0)
 
     assert excinfo.value.status_code == 429
-    assert "Retry-After" in excinfo.value.headers
+    headers = excinfo.value.headers or {}
+    assert "Retry-After" in headers
 
 
 def test_cross_tenant_chat_access_denied():

@@ -17,7 +17,7 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({ isOpen, citation
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center space-x-2.5">
-            <div className="p-2 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20">
+            <div className="p-2 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/30">
               <Bookmark className="h-5 w-5" />
             </div>
             <div>
@@ -39,10 +39,10 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({ isOpen, citation
           <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2 text-slate-300">
-                <FileText className="h-4 w-4 text-teal-400" />
+                <FileText className="h-4 w-4 text-amber-400" />
                 <span className="font-semibold text-sm">{citation.document_name}</span>
               </div>
-              <span className="px-2.5 py-1 text-xs font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30 rounded-full">
+              <span className="px-2.5 py-1 text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full">
                 Page {citation.page_number}
               </span>
             </div>
@@ -50,10 +50,10 @@ export const CitationDrawer: React.FC<CitationDrawerProps> = ({ isOpen, citation
             {citation.similarity !== undefined && citation.similarity !== null && (
               <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/60">
                 <span className="flex items-center space-x-1">
-                  <Target className="h-3.5 w-3.5 text-teal-400" />
+                  <Target className="h-3.5 w-3.5 text-amber-400" />
                   <span>Cosine Similarity</span>
                 </span>
-                <span className="font-mono font-medium text-teal-300">
+                <span className="font-mono font-medium text-amber-300">
                   {(citation.similarity * 100).toFixed(1)}%
                 </span>
               </div>

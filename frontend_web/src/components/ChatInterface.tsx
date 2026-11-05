@@ -156,10 +156,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ token, onInspectCi
         <button
           key={`cit-${matchIndex}`}
           onClick={() => onInspectCitation(matchedCitation)}
-          className="inline-flex items-center space-x-1 mx-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-teal-500/20 text-teal-300 border border-teal-500/40 hover:bg-teal-500 hover:text-slate-950 transition-all cursor-pointer shadow-sm align-middle"
+          className="inline-flex items-center space-x-1 mx-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-400 hover:text-slate-950 transition-all cursor-pointer shadow-sm align-middle"
           title={`Click to inspect verified source from ${docName}, Page ${pageNum}`}
         >
-          <Bookmark className="h-3 w-3" />
+          <Bookmark className="h-3 w-3 text-amber-400" />
           <span>{docName}, P.{pageNum}</span>
         </button>
       );
@@ -181,10 +181,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ token, onInspectCi
               <button
                 key={i}
                 onClick={() => onInspectCitation(c)}
-                className="text-[11px] px-2 py-0.5 bg-slate-800 hover:bg-teal-500/20 text-slate-300 hover:text-teal-300 border border-slate-700 hover:border-teal-500/40 rounded-full flex items-center space-x-1 transition-all"
+                className="text-[11px] px-2 py-0.5 bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/40 rounded-full flex items-center space-x-1 transition-all"
               >
                 <span>{c.document_name}</span>
-                <span className="text-teal-400 font-semibold">P.{c.page_number}</span>
+                <span className="text-amber-400 font-semibold">P.{c.page_number}</span>
               </button>
             ))}
           </div>
