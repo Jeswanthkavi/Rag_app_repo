@@ -1,0 +1,14 @@
+[tool.pyrefly]
+search-path = [
+    "backend",
+    "backend/app",
+    "C:/Users/JESWANTHKAVI/AppData/Local/Programs/Python/Python312/Lib/site-packages"
+]
+
+[tool.pyright]
+include = ["backend", "verify_rag.py"]
+extraPaths = ["backend", "backend/app"]
+pythonVersion = "3.12"
+pythonPlatform = "Windows"
+reportMissingImports = false
+

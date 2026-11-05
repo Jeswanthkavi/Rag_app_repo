@@ -1,0 +1,173 @@
+# MASTER ARCHITECTURAL PROMPT: PRODUCTION-READY MULTI-TENANT RAG SYSTEM
+# STACK: Python (FastAPI) + React (Vite) + Flutter (Dart) + Supabase (PostgreSQL & pgvector) + OpenRouter
+
+You are a Principal AI Architect and Lead Distributed Systems Engineer. You are tasked with engineering a fully operational, enterprise-grade, multi-tenant Personal Document RAG (Retrieval-Augmented Generation) application. 
+
+This is NOT a toy demo. Every component must be built to production standards: complete code, strict error handling, atomic state transitions, multi-tenant Row Level Security (RLS), anti-hallucination guardrails, and verifiable page-level source citations.
+
+---
+
+## 1. CORE SYSTEM SPECIFICATION
+
+* **Backend Engine**: Python 3.11+ with **FastAPI** (asynchronous, non-blocking I/O with `asyncio`, `httpx`, and `pydantic v2`).
+* **Database & Auth**: **Supabase** (PostgreSQL 15+ with `pgvector` HNSW indexing, Supabase Auth JWT verification, private Supabase Storage).
+* **AI & LLM Gateway**: **OpenRouter API** (`https://openrouter.ai/api/v1`) using the official `openai` Python SDK with custom base URL. Supports leading models:
+  * Answer Generation: `nvidia/nemotron-3-ultra-550b-a55b:free`, `meta-llama/llama-3.3-70b-instruct:free`, or `deepseek/deepseek-chat`.
+  * Embedding Model: `text-embedding-3-large` or Google 768/1536-dim embeddings via OpenRouter/Gemini.
+* **Web Client**: **React 18 + Vite + TypeScript + Tailwind CSS** (Lucide icons, streaming chat UI, document uploader, interactive citation inspection drawer).
+* **Mobile Client**: **Flutter 3 (Dart 3)** for Android & iOS (Material 3, native file picker, dynamic host switching for Android emulator `10.0.2.2` vs localhost, citation bottom-sheet modals).
+
+---
+
+## 2. DATABASE ARCHITECTURE (SUPABASE POSTGRESQL + PGVECTOR)
+
+Generate and execute idempotent, production-ready SQL migrations that satisfy the following requirements:
+
+1. **Extensions**:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
+   CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+   ```
+2. **Tables**:
+   * `public.profiles`: `id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE`, `email TEXT NOT NULL`, `is_approved BOOLEAN DEFAULT TRUE`, `created_at TIMESTAMPTZ DEFAULT NOW()`.
+   * `public.documents`: `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, `user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE`, `name TEXT NOT NULL`, `storage_path TEXT NOT NULL`, `file_size BIGINT NOT NULL`, `mime_type TEXT NOT NULL`, `page_count INT DEFAULT 1`, `status TEXT CHECK (status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending'`, `error_message TEXT`, `created_at TIMESTAMPTZ DEFAULT NOW()`, `updated_at TIMESTAMPTZ DEFAULT NOW()`.
+   * `public.document_chunks`: `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, `document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE`, `user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE`, `chunk_index INT NOT NULL`, `page_number INT NOT NULL`, `content TEXT NOT NULL`, `metadata JSONB NOT NULL DEFAULT '{}'::jsonb`, `embedding extensions.vector(768) NOT NULL`, `created_at TIMESTAMPTZ DEFAULT NOW()`.
+   * `public.conversations`: `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, `user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE`, `title TEXT NOT NULL`, `created_at TIMESTAMPTZ DEFAULT NOW()`.
+   * `public.messages`: `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`, `conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE`, `user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE`, `sender TEXT CHECK (sender IN ('user', 'assistant')) NOT NULL`, `content TEXT NOT NULL`, `citations JSONB DEFAULT '[]'::jsonb`, `created_at TIMESTAMPTZ DEFAULT NOW()`.
+
+3. **High-Performance Vector Index**:
+   * Create an **HNSW index** on `document_chunks.embedding` using cosine distance:
+     ```sql
+     CREATE INDEX IF NOT EXISTS idx_document_chunks_hnsw 
+     ON public.document_chunks USING hnsw (embedding extensions.vector_cosine_ops)
+     WITH (m = 16, ef_construction = 64);
+     ```
+
+4. **Multi-Tenant User-Scoped Vector Search RPC**:
+   * Implement `match_document_chunks` using security invoker/definer with strict `auth.uid() = user_id` scoping:
+     ```sql
+     CREATE OR REPLACE FUNCTION public.match_document_chunks(
+       query_embedding extensions.vector(768),
+       match_threshold FLOAT,
+       match_count INT
+     )
+     RETURNS TABLE (
+       id UUID,
+       document_id UUID,
+       content TEXT,
+       metadata JSONB,
+       similarity FLOAT
+     )
+     LANGUAGE plpgsql
+     SECURITY DEFINER
+     AS $$
+     BEGIN
+       RETURN QUERY
+       SELECT
+         c.id,
+         c.document_id,
+         c.content,
+         c.metadata,
+         1 - (c.embedding OPERATOR(extensions.<=>) query_embedding) AS similarity
+       FROM public.document_chunks c
+       WHERE c.user_id = auth.uid()
+         AND 1 - (c.embedding OPERATOR(extensions.<=>) query_embedding) >= match_threshold
+       ORDER JOIN public.documents d ON d.id = c.document_id
+       ORDER BY c.embedding OPERATOR(extensions.<=>) query_embedding ASC
+       LIMIT match_count;
+     END;
+     $$;
+     ```
+
+5. **Row Level Security (RLS)**:
+   * Enable RLS on every table.
+   * Write explicit policies for `SELECT`, `INSERT`, `UPDATE`, and `DELETE` ensuring users can strictly access only rows where `user_id = auth.uid()`.
+   * Set up private storage bucket `user-documents` with RLS restricting path access to `(storage.foldername(name))[1] = auth.uid()::text`.
+
+---
+
+## 3. PYTHON BACKEND (FASTAPI PRODUCTION RAG ENGINE)
+
+Directory layout under `/backend`:
+backend/ ├── app/ │ ├── api/ │ │ ├── auth_middleware.py # Supabase JWT authentication dependency │ │ ├── routes_documents.py # Upload trigger, status polling, document delete │ │ └── routes_chat.py # Multi-turn RAG chat with streaming SSE & citations │ ├── core/ │ │ ├── config.py # Pydantic v2 BaseSettings │ │ └── supabase_client.py # Service-role & user-scoped Supabase client factories │ ├── rag/ │ │ ├── extractor.py # PDF/TXT layout-aware text extraction (pdfplumber) │ │ ├── chunker.py # Recursive semantic chunker preserving page numbers │ │ ├── embeddings.py # Batch vector embedding generator with backoff │ │ └── synthesizer.py # LLM generation via OpenRouter with strict citations │ └── main.py # FastAPI application with CORS & lifespan events ├── tests/ │ └── test_rag_pipeline.py # Automated end-to-end ingestion and query test ├── requirements.txt └── .env.example
+
+### Critical Implementation Details:
+1. **Document Ingestion (`extractor.py` & `chunker.py`)**:
+   * Use `pdfplumber` for layout-aware PDF extraction. Preserve exact `page_number` for every extracted block.
+   * Chunking logic: Chunk size of 600–800 tokens, 100–150 token overlap. Never split in the middle of sentences. Inject document metadata into every chunk: `{ "document_name": doc.name, "page_number": p.num }`.
+   * Status state machine: Document starts as `pending` -> updates to `processing` -> on success `completed` (with `page_count` recorded) -> on exception `failed` with atomic cleanup and `error_message`.
+2. **Embedding Batching & Retries (`embeddings.py`)**:
+   * Generate embeddings in batches of 20–30 chunks to respect API rate limits.
+   * Include exponential backoff with jitter to gracefully handle HTTP 429 errors.
+3. **Strict Citation Prompting (`synthesizer.py`)**:
+   * Format context with explicit labels:
+     ```
+     [Passage 1] Source: "Report.pdf" | Page: 4
+     <content>
+     ```
+   * Enforce System Prompt:
+     1. Answer strictly using ONLY the provided document passages.
+     2. Every factual claim MUST cite its source: `[DocumentName.pdf, Page X]`.
+     3. If the answer cannot be found in the passages, state strictly: `"I could not find the answer in your documents."`
+     4. Zero extrapolation, zero outside knowledge, zero hallucination.
+   * Return structured JSON with `answer` string and `citations` array: `[{ "document_id": "...", "document_name": "...", "page_number": 4 }]`.
+4. **Resilient Provider Fallback**:
+   * If OpenRouter experiences peak-traffic latency or queue rejection, fall back gracefully to a direct grounded excerpt from the top-matching document chunk rather than crashing with an HTTP 500 error.
+5. **CORS & Auth**:
+   * Full CORS configuration allowing Flutter Web and React frontends (handling `OPTIONS` preflight with 204).
+   * Verify Supabase JWT on all protected endpoints using `HTTPBearer` and `supabase.auth.get_user(token)`.
+---
+## 4. REACT WEB FRONTEND (REACT + VITE + TAILWIND CSS)
+Directory layout under `/frontend_web`:
+* **Auth**: Email/Password authentication using `@supabase/supabase-js`.
+* **Documents View**:
+  * Drag-and-drop file upload zone supporting `.pdf` and `.txt`.
+  * Upload progress indicator.
+  * Real-time document table displaying status badges (`Processing` with spinner, `Completed`, `Failed`).
+  * Delete document button with confirmation dialog.
+* **Chat View**:
+  * Multi-turn conversational interface.
+  * Streaming typewriter text generation.
+  * Assistant messages parse bracketed citations (`[Doc.pdf, Page 3]`) into clickable pills.
+  * Clicking any citation pill opens an **Inspection Modal/Drawer** displaying the exact passage content, document name, page number, and similarity score.
+  * "New Chat" session reset button.
+---
+## 5. MOBILE CLIENT (FLUTTER 3 / DART)
+Directory layout under `/client_mobile`:
+* **Framework**: Flutter with Material 3 design and clean architecture (`features/auth`, `features/documents`, `features/chat`).
+* **Dynamic URL Resolver**:
+  * Automatically resolves API base URL: `http://10.0.2.2:8000` on Android emulator, `http://localhost:8000` on Web / iOS.
+* **Document Picker**:
+  * Select PDFs via `file_picker` (handling both mobile `File.readAsBytes()` and web `PlatformFile.bytes`).
+  * Direct upload to Supabase Storage and triggering FastAPI ingestion.
+* **Chat Screen**:
+  * Message bubbles, loading indicators, and clickable citation badges.
+  * Tapping a citation opens a custom `showModalBottomSheet` showing the verified cited source excerpt and page number.
+---
+## 6. ENVIRONMENT VARIABLES SPECIFICATION
+Ensure both root `.env.example` and backend `.env.example` contain:
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-secret
+# OpenRouter
+OPENROUTER_API_KEY=sk-or-v1-your-key
+OPENROUTER_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+# Alternative models: meta-llama/llama-3.3-70b-instruct:free | deepseek/deepseek-chat
+# Embedding Configuration
+EMBEDDING_PROVIDER=openrouter # or gemini
+EMBEDDING_MODEL=text-embedding-3-large # or text-embedding-004
+EMBEDDING_DIMENSION=768
+# Server
+BACKEND_HOST=0.0.0.0
+BACKEND_PORT=8000
+7. EXECUTION DISCIPLINE & RULES
+No Pseudo-Code: Provide full, syntactically correct, production code. Do NOT leave comments like // implement this later or ... rest of the code ....
+Security First: The SUPABASE_SERVICE_ROLE_KEY must strictly reside on the Python backend; never expose it to React or Flutter.
+Step-by-Step Delivery:
+Phase 1: Database SQL migration script (Tables, HNSW Index, RLS, and match_document_chunks RPC).
+Phase 2: Complete Python FastAPI backend (requirements.txt, core config, RAG pipeline, routes, main).
+Phase 3: React Web client.
+Phase 4: Flutter Mobile client.
+Phase 5: Automated CLI verification script verify_rag.py to ingest a PDF and execute a question-answering benchmark.

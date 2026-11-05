@@ -1,0 +1,11 @@
+{
+  "include": [
+    "backend",
+    "verify_rag.py"
+  ],
+  "extraPaths": [
+    "backend",
+    "backend/app"
+  ],
+  "reportMissingImports": false
+}

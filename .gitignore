@@ -1,0 +1,82 @@
+# Environment and Secrets (CRITICAL: Never commit secrets to GitHub)
+.env
+.env.*
+*.env
+backend/.env
+frontend_web/.env
+!*.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/
+ENV/
+
+# Node.js / Vite / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+frontend_web/dist/
+frontend_web/node_modules/
+
+# Flutter / Dart
+client_mobile/.dart_tool/
+client_mobile/.flutter-plugins
+client_mobile/.flutter-plugins-dependencies
+client_mobile/.packages
+client_mobile/build/
+client_mobile/.pub-cache/
+client_mobile/.pub/
+*.lock
+
+# Android Gradle builds
+.gradle/
+client_mobile/android/.gradle/
+client_mobile/android/local.properties
+client_mobile/android/app/build/
+client_mobile/android/captures/
+*.apk
+*.aab
+
+# IDE & Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+supabase/.temp/
+frontend_web/dist/

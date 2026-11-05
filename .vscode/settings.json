@@ -1,0 +1,24 @@
+{
+  "dart.projectSearchPaths": [
+    "client_mobile"
+  ],
+  "dart.flutterSdkPath": "D:\\Flutter_pack\\flutter",
+  "python.defaultInterpreterPath": "C:\\Users\\JESWANTHKAVI\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend",
+    "${workspaceFolder}/backend/app"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/backend",
+    "${workspaceFolder}/backend/app"
+  ],
+  "pyrefly.searchPaths": [
+    "${workspaceFolder}/backend",
+    "${workspaceFolder}/backend/app",
+    "C:/Users/JESWANTHKAVI/AppData/Local/Programs/Python/Python312/Lib/site-packages"
+  ],
+  "dart.analysisExcludedFolders": [
+    ".dart_tool",
+    "build"
+  ]
+}
