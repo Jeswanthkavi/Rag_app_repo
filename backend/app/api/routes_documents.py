@@ -53,8 +53,9 @@ async def process_document_pipeline(
     5. Persist chunks in Supabase document_chunks table
     6. Transition status to 'completed' (or 'failed' on error with cleanup)
     """
-    client = get_service_client()
+    print(f"[INFO] Starting background ingestion pipeline for '{document_name}' (ID: {document_id})")
     try:
+        client = get_service_client()
         # Step 1: Update status to processing
         client.table("documents").update({
             "status": "processing",
@@ -64,6 +65,7 @@ async def process_document_pipeline(
         # Step 2: Extraction
         page_blocks = DocumentExtractor.extract(file_bytes, mime_type)
         page_count = len(page_blocks)
+        print(f"[INFO] Extracted {page_count} page blocks from '{document_name}'")
 
         # Step 3: Chunking
         chunker = SemanticChunker(target_chunk_tokens=700, chunk_overlap_tokens=120)
@@ -75,11 +77,13 @@ async def process_document_pipeline(
 
         if not chunks:
             raise ValueError("No text could be extracted or chunked from the document.")
+        print(f"[INFO] Generated {len(chunks)} semantic chunks for '{document_name}'")
 
         # Step 4: Batch Vector Embeddings
         chunk_texts = [c.content for c in chunks]
         embedder = EmbeddingGenerator(dimension=settings.embedding_dimension)
         embeddings = await embedder.generate_embeddings(chunk_texts)
+        print(f"[INFO] Generated {len(embeddings)} 768-dim embeddings")
 
         # Step 5: Insert document_chunks in batches of 50
         records = []
@@ -107,19 +111,22 @@ async def process_document_pipeline(
             "error_message": None,
             "updated_at": "now()"
         }).eq("id", document_id).execute()
+        print(f"[SUCCESS] Successfully ingested '{document_name}' with {len(chunks)} chunks across {page_count} pages.")
 
     except Exception as e:
         error_msg = str(e)
+        print(f"[ERROR] Document processing failed for '{document_name}': {error_msg}")
         # Atomic failure state transition and cleanup
         try:
+            client = get_service_client()
             client.table("document_chunks").delete().eq("document_id", document_id).execute()
             client.table("documents").update({
                 "status": "failed",
                 "error_message": error_msg[:500],
                 "updated_at": "now()"
             }).eq("id", document_id).execute()
-        except Exception:
-            pass
+        except Exception as cleanup_err:
+            print(f"[ERROR] Failed cleanup for '{document_id}': {cleanup_err}")
 
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -299,7 +306,7 @@ async def upload_document(
 
     return DocumentResponse(
         id=doc_id,
-        name=filename,
+        name=clean_filename,
         storage_path=storage_path,
         file_size=file_size,
         mime_type=content_type,
