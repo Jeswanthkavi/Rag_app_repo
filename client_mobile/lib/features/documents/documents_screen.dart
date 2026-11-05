@@ -52,7 +52,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     try {
       final files = await FilePicker.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'txt', 'md'],
+        allowedExtensions: ['pdf', 'docx', 'doc', 'txt', 'md'],
       );
 
       if (files.isEmpty) return;

@@ -75,8 +75,8 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ token }) => {
 
     // Check extension
     const name = file.name.toLowerCase();
-    if (!name.endsWith('.pdf') && !name.endsWith('.txt') && !name.endsWith('.md')) {
-      setErrorMsg('Please upload a valid .pdf, .txt, or .md document.');
+    if (!name.endsWith('.pdf') && !name.endsWith('.docx') && !name.endsWith('.doc') && !name.endsWith('.txt') && !name.endsWith('.md')) {
+      setErrorMsg('Please upload a valid .pdf, .docx, .txt, or .md document.');
       return;
     }
 
@@ -146,7 +146,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ token }) => {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.txt,.md"
+          accept=".pdf,.docx,.doc,.txt,.md"
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
         />
@@ -157,7 +157,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({ token }) => {
           {uploading ? uploadProgress : 'Drop documents here or click to browse'}
         </h4>
         <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-          Supports multi-page PDF documents and Plaintext. Layout preserved and embedded into 768-dim vectors.
+          Supports multi-page PDF, Word documents (.docx), and Plaintext. Layout preserved and embedded into 768-dim vectors.
         </p>
       </div>
 

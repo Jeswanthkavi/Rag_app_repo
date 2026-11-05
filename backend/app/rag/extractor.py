@@ -23,11 +23,68 @@ class DocumentExtractor:
     def extract(cls, file_content: Union[bytes, str], mime_type: str = "application/pdf") -> List[PageBlock]:
         """
         Extracts structured page-level text from raw file bytes or string.
+        Supports PDF, DOCX, TXT, and Markdown documents.
         """
         if "pdf" in mime_type.lower() or (isinstance(file_content, bytes) and file_content.startswith(b"%PDF")):
             return cls._extract_pdf(file_content)
+        elif "docx" in mime_type.lower() or "word" in mime_type.lower() or (isinstance(file_content, bytes) and file_content.startswith(b"PK\x03\x04")):
+            return cls._extract_docx(file_content)
         else:
             return cls._extract_plaintext(file_content)
+
+    @classmethod
+    def _extract_docx(cls, content: Union[bytes, str]) -> List[PageBlock]:
+        """
+        Extracts paragraphs and tables from a Word (.docx) document,
+        grouping content into virtual pages (~350 words per page block)
+        while preserving tabular layouts.
+        """
+        import docx
+        stream = io.BytesIO(content) if isinstance(content, bytes) else open(content, "rb")
+        doc = docx.Document(stream)
+        
+        blocks: List[PageBlock] = []
+        current_paragraphs: List[str] = []
+        page_num = 1
+        word_count = 0
+
+        def _flush_page():
+            nonlocal page_num, current_paragraphs, word_count
+            if current_paragraphs:
+                blocks.append(PageBlock(
+                    page_number=page_num,
+                    text="\n\n".join(current_paragraphs),
+                    metadata={"page": page_num}
+                ))
+                page_num += 1
+                current_paragraphs = []
+                word_count = 0
+
+        for p in doc.paragraphs:
+            text = p.text.strip()
+            if not text:
+                continue
+            current_paragraphs.append(text)
+            word_count += len(text.split())
+            if word_count >= 350:
+                _flush_page()
+
+        # Extract tables and preserve markdown table structure
+        for table in doc.tables:
+            table_markdowns = []
+            for row in table.rows:
+                cells = [c.text.strip().replace("\n", " ") for c in row.cells]
+                if any(cells):
+                    table_markdowns.append("| " + " | ".join(cells) + " |")
+            if table_markdowns:
+                current_paragraphs.append("\n".join(table_markdowns))
+                word_count += sum(len(r.split()) for r in table_markdowns)
+                if word_count >= 350:
+                    _flush_page()
+
+        _flush_page()
+
+        return blocks or [PageBlock(page_number=1, text="Empty document.", metadata={"page": 1})]
 
     @classmethod
     def _extract_pdf(cls, content: Union[bytes, str]) -> List[PageBlock]:

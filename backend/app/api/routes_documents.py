@@ -151,7 +151,7 @@ async def upload_document(
 
     # File extension check
     lower_name = clean_filename.lower()
-    if not any(lower_name.endswith(ext) for ext in [".pdf", ".txt", ".md"]):
+    if not any(lower_name.endswith(ext) for ext in [".pdf", ".docx", ".doc", ".txt", ".md"]):
         log_security_event(
             "MALICIOUS_FILE_BLOCKED",
             client_ip=client_ip,
@@ -161,7 +161,7 @@ async def upload_document(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file format. Only verified .pdf, .txt, and .md files are allowed."
+            detail="Unsupported file format. Only verified .pdf, .docx, .txt, and .md files are allowed."
         )
 
     # 2. Bounded stream reading to enforce strict size ceiling (Anti-DoS)
@@ -212,6 +212,20 @@ async def upload_document(
                 detail="Invalid file content: The file is not a valid PDF document."
             )
         content_type = "application/pdf"
+    elif lower_name.endswith((".docx", ".doc")):
+        if not file_bytes.startswith(b"PK"):
+            log_security_event(
+                "MALICIOUS_FILE_BLOCKED",
+                client_ip=client_ip,
+                user_id=current_user.user_id,
+                detail=f"DOCX zip header missing for {clean_filename}",
+                severity="ERROR"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid file content: The file is not a valid Word (.docx) document."
+            )
+        content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     elif lower_name.endswith((".txt", ".md")):
         # Ensure text is valid UTF-8 and contains no embedded binary null bytes
         if b"\x00" in file_bytes:

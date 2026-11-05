@@ -10,7 +10,7 @@ class EnvConfig {
   /// or by setting this variable directly for production release.
   static const String _configuredApiUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: '', // Set your public backend URL here (e.g., 'https://my-rag-api.onrender.com')
+    defaultValue: 'https://rag-app-db2l.onrender.com',
   );
 
   /// Dynamically resolves the API base URL based on runtime platform

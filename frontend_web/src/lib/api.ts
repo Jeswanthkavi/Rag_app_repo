@@ -1,9 +1,11 @@
 import { DocumentItem, Message, Conversation, Citation } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 
-  (typeof window !== 'undefined' && (window.location.port === '3000' || window.location.port === '3001' || window.location.port === '5173')
-    ? 'http://localhost:8000' 
-    : '');
+const isLocalhost = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim() !== '')
+  ? import.meta.env.VITE_API_BASE_URL.trim()
+  : (isLocalhost ? 'https://rag-app-db2l.onrender.com' : '');
 
 export async function listDocuments(token: string): Promise<DocumentItem[]> {
   const res = await fetch(`${API_BASE}/api/documents`, {
